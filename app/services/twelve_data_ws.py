@@ -4,6 +4,7 @@ from fastapi import Depends
 import websockets
 import json
 import os
+import requests
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, get_db
@@ -17,28 +18,47 @@ from app.crud.market_data import add_market_data
 
 load_dotenv()
 
+TWELVE_DATA_API_URL = os.getenv("TWELVE_DATA_API_URL")
 TWELVE_DATA_WEBSOCKET_URL = os.getenv("TWELVE_DATA_WEBSOCKET_URL")
 TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
 
 
 # Function to connect to Twelve Data WebSocket and subscribe to symbols
 async def connect_to_twelve_data():
+    with SessionLocal() as db:
+        instruments_list = get_instruments(db)
+    logger.info(f"{instruments_list=}")
+    for instrument in instruments_list:
+        symbol, exchange = instrument.values()
+        response = requests.get(
+            f"{TWELVE_DATA_API_URL}price?symbol={symbol}{f'&exchange={exchange}' if exchange != None else ''}&apikey={TWELVE_DATA_API_KEY}"
+        )
+        logger.info(f"{response.text=}")
+        response.raise_for_status()
+        data = response.json()
+        inserted_market_data = add_market_data(
+            db,
+            symbol=symbol,
+            exchange=exchange,
+            price=data.get("price"),
+        )
+        logger.info(inserted_market_data)
+
     logger.info("Connecting to twelve data websocket")
     async with websockets.connect(
         f"{TWELVE_DATA_WEBSOCKET_URL}quotes/price?apikey={TWELVE_DATA_API_KEY}"
     ) as websocket:
         # Send subscription message to the Twelve Data WebSocket for a specific symbol (e.g., AAPL)
-        with SessionLocal() as db:
-            symbols = ",".join(
-                [
-                    (
-                        f"{instr['symbol']}:{instr['exchange']}"
-                        if instr["exchange"] != None
-                        else f"{instr['symbol']}"
-                    )
-                    for instr in get_instruments(db)
-                ]
-            )
+        symbols = ",".join(
+            [
+                (
+                    f"{instr['symbol']}:{instr['exchange']}"
+                    if instr["exchange"] != None
+                    else f"{instr['symbol']}"
+                )
+                for instr in instruments_list
+            ]
+        )
         logger.info(f"{symbols=}")
         subscribe_message = {"action": "subscribe", "params": {"symbols": symbols}}
         await websocket.send(json.dumps(subscribe_message))
