@@ -289,7 +289,7 @@ While Twelve Data provides powerful financial data through their WebSocket and A
 2. **Limited Symbol Subscriptions**: WebSockets on the free tier can only subscribe to **specific symbols**. You are restricted to a smaller set of symbols and cannot subscribe to multiple symbols or use wildcard subscriptions.
 3. **Data Stream Limits**: The data streams for the free tier are typically limited to basic information and fewer symbols. You may experience interruptions in the data stream or be restricted from accessing certain market data.
 4. **Limited Data Depth**: WebSocket on the free tier may provide **less frequent updates** and may limit the depth of data for some instruments. You could receive data at a lower frequency or with a delay compared to premium users.
-5. **Inactive Connections**: WebSocket connections may be **terminated after inactivity** or could be disconnected more frequently for free-tier users compared to those on paid plans.
+5. **Inactive Connections**: WebSocket connections may be **terminated after inactivity** or could be disconnected more frequently for free-tier users compared to those on paid plans.  
 For more information about Twelve Data's WebSocket limitations, visit [https://support.twelvedata.com/en/articles/5335783-trial](https://support.twelvedata.com/en/articles/5335783-trial)
 
 ---
