@@ -3,9 +3,10 @@ from app.logger import logger
 from app.crud.market_data import get_market_data_by_instrument
 from app.crud.positions import get_positions_by_client
 from app.crud.clients import get_client
+from app.schemas.margin import MarginResponse
 
 
-def calculate_margin_shortfall(db: Session, client_id: int):
+def calculate_margin_status(db: Session, client_id: int):
     # Fetch positions and loan amount from the database
     positions = get_positions_by_client(db, client_id)
     loan_amount = get_client(db, client_id).loan
@@ -30,4 +31,10 @@ def calculate_margin_shortfall(db: Session, client_id: int):
     margin_shortfall = total_margin_requirement - net_equity
 
     # Return the result
-    return margin_shortfall
+    return MarginResponse(
+        portfolio_market_value=portfolio_market_value,
+        loan_amount=loan_amount,
+        net_equity=net_equity,
+        total_margin_requirement=total_margin_requirement,
+        margin_shortfall=margin_shortfall,
+    )

@@ -23,6 +23,16 @@ def get_instruments(db: Session):
     return [{"symbol": row[0], "exchange": row[1]} for row in result]
 
 
+def get_instruments_by_client(db: Session, client_id: int):
+    result = (
+        db.query(Position.symbol, Position.exchange)
+        .filter(Position.client_id == client_id)
+        .distinct()
+        .all()
+    )
+    return [{"symbol": row[0], "exchange": row[1]} for row in result]
+
+
 def get_position(db: Session, client_id: int, symbol: str):
     return (
         db.query(Position)

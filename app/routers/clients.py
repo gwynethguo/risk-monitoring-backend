@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 # Create a client
-@router.post("/clients/", response_model=ClientResponse)
+@router.post("/clients", response_model=ClientResponse)
 def create_client(client: ClientCreate, db: Session = Depends(get_db)):
     logger.info(client.model_dump())
     return crud.clients.create_client(db=db, **client.model_dump())
@@ -24,7 +24,7 @@ def get_client(client_id: int, db: Session = Depends(get_db)):
     return db_client
 
 
-# Update a client
+# Update a client's loan
 @router.put("/clients/{client_id}", response_model=ClientResponse)
 def update_client_loan(client_id: int, loan: int, db: Session = Depends(get_db)):
     db_client = crud.clients.get_client(db, client_id=client_id)

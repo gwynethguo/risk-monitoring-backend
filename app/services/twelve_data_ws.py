@@ -1,20 +1,14 @@
-import asyncio
-from datetime import datetime, timezone
-from fastapi import Depends
 import websockets
 import json
 import os
 import requests
 from dotenv import load_dotenv
-from sqlalchemy.orm import Session
-from app.database import SessionLocal, get_db
+from app.database import SessionLocal
 from app.logger import logger
-from app.models import MarketData
-from app.ws.ws_handler import (
-    send_to_frontend,
-)  # Function to send data to frontend clients
+from app.ws.ws_handler import send_market_update
 from app.crud.positions import get_instruments
 from app.crud.market_data import add_market_data
+from app.routers.market_data import get_market_data
 
 load_dotenv()
 
@@ -23,33 +17,27 @@ TWELVE_DATA_WEBSOCKET_URL = os.getenv("TWELVE_DATA_WEBSOCKET_URL")
 TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
 
 
-# Function to connect to Twelve Data WebSocket and subscribe to symbols
-async def connect_to_twelve_data():
+def get_symbols():
     with SessionLocal() as db:
         instruments_list = get_instruments(db)
-    logger.info(f"{instruments_list=}")
-    for instrument in instruments_list:
-        symbol, exchange = instrument.values()
-        response = requests.get(
-            f"{TWELVE_DATA_API_URL}price?symbol={symbol}{f'&exchange={exchange}' if exchange != None else ''}&apikey={TWELVE_DATA_API_KEY}"
-        )
-        logger.info(f"{response.text=}")
-        response.raise_for_status()
-        data = response.json()
-        inserted_market_data = add_market_data(
-            db,
-            symbol=symbol,
-            exchange=exchange,
-            price=data.get("price"),
-        )
-        logger.info(inserted_market_data)
+        logger.info(f"{instruments_list=}")
+        for instrument in instruments_list:
+            symbol, exchange = instrument.values()
+            response = requests.get(
+                f"{TWELVE_DATA_API_URL}price?symbol={symbol}{f'&exchange={exchange}' if exchange != None else ''}&apikey={TWELVE_DATA_API_KEY}"
+            )
+            logger.info(f"{response.text=}")
+            response.raise_for_status()
+            data = response.json()
+            inserted_market_data = add_market_data(
+                db,
+                symbol=symbol,
+                exchange=exchange,
+                price=data.get("price"),
+            )
+            logger.info(inserted_market_data)
 
-    logger.info("Connecting to twelve data websocket")
-    async with websockets.connect(
-        f"{TWELVE_DATA_WEBSOCKET_URL}quotes/price?apikey={TWELVE_DATA_API_KEY}"
-    ) as websocket:
-        # Send subscription message to the Twelve Data WebSocket for a specific symbol (e.g., AAPL)
-        symbols = ",".join(
+        return [(mp["symbol"], mp["exchange"]) for mp in instruments_list], ",".join(
             [
                 (
                     f"{instr['symbol']}:{instr['exchange']}"
@@ -59,8 +47,19 @@ async def connect_to_twelve_data():
                 for instr in instruments_list
             ]
         )
-        logger.info(f"{symbols=}")
-        subscribe_message = {"action": "subscribe", "params": {"symbols": symbols}}
+
+
+# Function to connect to Twelve Data WebSocket and subscribe to symbols
+async def connect_to_twelve_data():
+    logger.info("Connecting to twelve data websocket")
+    async with websockets.connect(
+        f"{TWELVE_DATA_WEBSOCKET_URL}quotes/price?apikey={TWELVE_DATA_API_KEY}"
+    ) as websocket:
+        instruments_list, symbols = get_symbols()
+        subscribe_message = {
+            "action": "subscribe",
+            "params": {"symbols": symbols},
+        }
         await websocket.send(json.dumps(subscribe_message))
 
         message = await websocket.recv()
@@ -95,9 +94,58 @@ async def connect_to_twelve_data():
                     #     data.get("timestamp"), timezone.utc
                     # ),
                 )
-                logger.info(inserted_market_data)
             # Forward data to frontend clients
-            # await send_to_frontend(data)
+            frontend_data = {
+                key: data[key]
+                for key in data
+                if key in ["event", "symbol", "exchange", "price"]
+            }
+
+            if "exchange" not in frontend_data:
+                frontend_data["exchange"] = None
+
+            await send_market_update(frontend_data)
+
+            with SessionLocal() as db:
+                next_instruments_list = [
+                    (mp["symbol"], mp["exchange"]) for mp in get_instruments(db)
+                ]
+            diff_instruments_list = list(
+                set(next_instruments_list) - set(instruments_list)
+            )
+            logger.info(f"{diff_instruments_list=}")
+            if len(diff_instruments_list) > 0:
+                for symbol, exchange in diff_instruments_list:
+                    response = requests.get(
+                        f"{TWELVE_DATA_API_URL}price?symbol={symbol}{f'&exchange={exchange}' if exchange != None else ''}&apikey={TWELVE_DATA_API_KEY}"
+                    )
+                    logger.info(f"{response.text=}")
+                    response.raise_for_status()
+                    data = response.json()
+                    inserted_market_data = add_market_data(
+                        db,
+                        symbol=symbol,
+                        exchange=exchange,
+                        price=data.get("price"),
+                    )
+                    logger.info(inserted_market_data)
+                subscribe_message = {
+                    "action": "subscribe",
+                    "params": {
+                        "symbols": ",".join(
+                            [
+                                (
+                                    f"{instr[0]}:{instr[1]}"
+                                    if instr[1] != None
+                                    else f"{instr[0]}"
+                                )
+                                for instr in diff_instruments_list
+                            ]
+                        )
+                    },
+                }
+                await websocket.send(json.dumps(subscribe_message))
+                instruments_list = next_instruments_list
 
 
 # Start the connection to Twelve Data WebSocket

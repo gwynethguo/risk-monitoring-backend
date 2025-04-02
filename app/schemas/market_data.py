@@ -17,7 +17,7 @@ class MarketDataCreate(BaseModel):
 class MarketDataResponse(BaseModel):
     id: int
     symbol: str
-    exchange: str
+    exchange: Optional[str]
     price: float
     timestamp: datetime
 
