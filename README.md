@@ -261,6 +261,19 @@ The following APIs are available:
 
 ---
 
+## Testing
+
+Due to time constraints, automated tests for the backend were not fully implemented. Instead, testing was conducted manually by:
+
+1. Sending API requests to the backend endpoints using tools like [Postman](https://www.postman.com/) or `curl`.
+2. Verifying the responses to ensure they match the expected behavior.
+3. Checking the database directly to confirm that the data is being updated correctly.
+4. Reviewing the application logs to identify any errors or unexpected behavior.
+
+For future improvements, automated tests using `pytest` and `FastAPI`'s `TestClient` are recommended to ensure comprehensive test coverage and faster validation of changes.
+
+---
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
